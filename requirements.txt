@@ -18,3 +18,4 @@ requests>=2.31.0
 flask-socketio==5.3.6
 python-socketio==5.10.0
 eventlet==0.33.3
+mmcv-full==1.7.2
