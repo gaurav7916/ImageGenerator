@@ -53,7 +53,7 @@ GEMINI_API_KEY = 'AIzaSyBQGGvsxE-Ol3oMdAvNQDKiQJ0HpLyMm7I'
 
 # Initialize Flask app
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your-secret-key-here'
+app.config['SECRET_KEY'] = 'AIzaSyBQGGvsxE-Ol3oMdAvNQDKiQJ0HpLyMm7I'
 
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
@@ -537,4 +537,4 @@ if __name__ == "__main__":
     print("Starting Flask-SocketIO server...")
     print("Open your browser and navigate to: http://127.0.0.1:5500")
     print("="*60 + "\n")
-    socketio.run(app, debug=True, port=5500, host='127.0.0.1')
+    socketio.run(app, debug=True)
