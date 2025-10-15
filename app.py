@@ -33,8 +33,6 @@ import google.generativeai as genai
 from typing import Optional
 import base64
 from io import BytesIO
-import eventlet
-eventlet.monkey_patch()
 
 from flask import Flask, render_template_string
 from flask_socketio import SocketIO, emit
@@ -53,7 +51,7 @@ GEMINI_API_KEY = 'AIzaSyBQGGvsxE-Ol3oMdAvNQDKiQJ0HpLyMm7I'
 
 # Initialize Flask app
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'AIzaSyBQGGvsxE-Ol3oMdAvNQDKiQJ0HpLyMm7I'
+app.config['SECRET_KEY'] = 'your-secret-key-here'
 
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
@@ -313,7 +311,6 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 socketio = SocketIO(
     app, 
     cors_allowed_origins="*",
-    async_mode='eventlet',
     logger=True,
     engineio_logger=True,
     ping_timeout=60,
@@ -344,7 +341,7 @@ def setup_gemini(api_key: Optional[str] = None):
     return genai
 
 
-def enhance_prompt_with_gemini(prompt: str, model_name: str = "models/gemini-2.5-pro") -> str:
+def enhance_prompt_with_gemini(prompt: str, model_name: str = "models/gemini-2.0-flash-exp") -> str:
     try:
         setup_gemini()
         model = genai.GenerativeModel(model_name)
@@ -537,4 +534,4 @@ if __name__ == "__main__":
     print("Starting Flask-SocketIO server...")
     print("Open your browser and navigate to: http://127.0.0.1:5500")
     print("="*60 + "\n")
-    socketio.run(app, debug=True)
+    socketio.run(app, debug=True, port=5500, host='127.0.0.1')
