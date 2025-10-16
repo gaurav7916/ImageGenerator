@@ -46,12 +46,13 @@ sys.stderr = stderr_backup
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using device: {device}")
 
-# Gemini API Key
-GEMINI_API_KEY = 'AIzaSyBQGGvsxE-Ol3oMdAvNQDKiQJ0HpLyMm7I'
+# Get Gemini API Key from environment variable for security
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', 'AIzaSyBQGGvsxE-Ol3oMdAvNQDKiQJ0HpLyMm7I')
 
 # Initialize Flask app
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your-secret-key-here'
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'AIzaSyBQGGvsxE-Ol3oMdAvNQDKiQJ0HpLyMm7I')
+
 
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
@@ -188,7 +189,10 @@ HTML_TEMPLATE = '''
   </main>
 
   <script>
-    const socket = io('http://127.0.0.1:5500', {
+   // Dynamically get the server URL
+    const serverUrl = window.location.origin;
+    
+    const socket = io(serverUrl, {
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionDelay: 1000,
@@ -314,7 +318,8 @@ socketio = SocketIO(
     logger=True,
     engineio_logger=True,
     ping_timeout=60,
-    ping_interval=25
+    ping_interval=25,
+    async_mode='threading'
 )
 
 # Load CLIP model
@@ -529,9 +534,19 @@ def index():
     return render_template_string(HTML_TEMPLATE)
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":    
+    port = int(os.environ.get('PORT', 5500))
+    host = os.environ.get('HOST', '0.0.0.0')
+    
     print("\n" + "="*60)
-    print("Starting Flask-SocketIO server...")
-    print("Open your browser and navigate to: http://127.0.0.1:5500")
+    print(f"Starting Flask-SocketIO server on {host}:{port}...")
     print("="*60 + "\n")
-    socketio.run(app, debug=True, port=5500, host='127.0.0.1')
+    
+    # For production, set debug=False
+    socketio.run(
+        app, 
+        debug=False,  # Changed to False for production
+        port=port, 
+        host=host,
+        allow_unsafe_werkzeug=True  # Only if using Werkzeug in production (not recommended)
+    )
