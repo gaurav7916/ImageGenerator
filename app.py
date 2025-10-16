@@ -46,13 +46,12 @@ sys.stderr = stderr_backup
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using device: {device}")
 
-# Get Gemini API Key from environment variable for security
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', 'AIzaSyBQGGvsxE-Ol3oMdAvNQDKiQJ0HpLyMm7I')
+# Gemini API Key
+GEMINI_API_KEY = 'AIzaSyBQGGvsxE-Ol3oMdAvNQDKiQJ0HpLyMm7I'
 
 # Initialize Flask app
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'AIzaSyBQGGvsxE-Ol3oMdAvNQDKiQJ0HpLyMm7I')
-
+app.config['SECRET_KEY'] = 'your-secret-key-here'
 
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
@@ -189,7 +188,6 @@ HTML_TEMPLATE = '''
   </main>
 
   <script>
-   // Dynamically get the server URL
     const serverUrl = window.location.origin;
     
     const socket = io(serverUrl, {
@@ -318,7 +316,8 @@ socketio = SocketIO(
     logger=True,
     engineio_logger=True,
     ping_timeout=60,
-    ping_interval=25
+    ping_interval=25,
+    async_mode='threading'
 )
 
 # Load CLIP model
@@ -532,8 +531,11 @@ def handle_generate_image(data):
 def index():
     return render_template_string(HTML_TEMPLATE)
 
-
-if __name__ == "__main__":    
+@app.route('/health')
+def health_check():
+    return {'status': 'healthy'}, 200
+    
+if __name__ == "__main__":
     port = int(os.environ.get('PORT', 5500))
     host = os.environ.get('HOST', '0.0.0.0')
     
