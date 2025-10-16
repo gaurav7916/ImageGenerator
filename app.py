@@ -318,8 +318,7 @@ socketio = SocketIO(
     logger=True,
     engineio_logger=True,
     ping_timeout=60,
-    ping_interval=25,
-    async_mode='threading'
+    ping_interval=25
 )
 
 # Load CLIP model
