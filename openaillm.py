@@ -1,24 +1,24 @@
 import torch
-import torch.nn as nn
 from datasets import load_dataset
 import time
 import matplotlib.pyplot as plt
-from sklearn.metrics import accuracy_score
 from PIL import Image
+import tqdm as notebook_tqdm
+from tqdm import tqdm
 from transformers import CLIPProcessor, CLIPModel, CLIPTokenizerFast, CLIPImageProcessor
 import numpy as np
 from diffusers import DiffusionPipeline
 import warnings
-import seaborn as sns
 from torchvision.models import inception_v3
 from torchvision import transforms as T
 import torch.nn.functional as F
 from math import floor
+import google.generativeai as genai
+from typing import Optional
 warnings.filterwarnings("ignore")
 device = "cuda" if torch.cuda.is_available() else "cpu"
-print(device)
-
-# pip install datasets diffusers transformers
+import base64
+from io import BytesIO
 
 
 # 1. Time model loading
@@ -37,9 +37,55 @@ dataset = load_dataset("NinaKarine/t2i-compbench", "3d_spatial_val")
 end = time.time()
 print(f"Dataset loaded in {end - start:.2f} seconds")
 
-dataset
 
-dataset["spatial_val"][0]
+api_key ='AIzaSyALHqGrE8hRFm9_KC6VR5Q2VUr8iFkTa3I'
+
+def setup_gemini(api_key: Optional[str] = None) -> genai:
+    api_key ='AIzaSyALHqGrE8hRFm9_KC6VR5Q2VUr8iFkTa3I'
+    genai.configure(api_key=api_key)
+    return genai
+
+def enhance_prompt_with_gemini(prompt: str, model_name: str = "models/gemini-2.5-pro") -> str:
+    """
+    Enhance a prompt using Gemini 2.5 Pro
+
+    Args:
+        prompt (str): The original prompt to enhance
+        model_name (str): Gemini model to use
+
+    Returns:
+        str: Enhanced prompt
+    """
+    try:
+        setup_gemini()
+
+        # Initialize the model
+        model = genai.GenerativeModel(model_name)
+
+        # Enhanced prompt within 100 words limit
+        enhancement_prompt = f"""
+        Enhance this image generation prompt to be more detailed and real. Add specifics about visual style, composition, lighting, colors.
+        Focus on key artistic elements that would improve image generation to look real. Keep the enhanced version under 50 words.
+
+        Original: "{prompt}"
+
+        Return ONLY the enhanced prompt, no explanations.
+        Enhanced prompt:
+        """
+        response = model.generate_content(enhancement_prompt)
+        enhanced = response.text.strip()
+
+        # Verify word count
+        if len(enhanced.split()) > 50:
+            words = enhanced.split()[:50]
+            enhanced = ' '.join(words)
+
+        return enhanced
+
+    except Exception as e:
+        print(f"Error enhancing prompt with Gemini: {e}")
+        return prompt
+
 
 class TextToImageEvaluator:
     def __init__(self):
@@ -67,31 +113,50 @@ class TextToImageEvaluator:
         self._inception_model = None
 
 
+    def cleanup_memory(self):
+        """Clean up GPU memory"""
+        if self.device == "cuda":
+            # Move models to CPU to free VRAM
+            if hasattr(self, 'generator'):
+                self.generator.to("cpu")
+            if hasattr(self, 'clip_model'):
+                self.clip_model.to("cpu")
+            if hasattr(self, '_inception_model') and self._inception_model is not None:
+                self._inception_model.to("cpu")
+            
+            torch.cuda.empty_cache()
+
     def generate_image(self, text, num_inference_steps=30, guidance_scale=7.5):
         """Generate image from text using Stable Diffusion"""
         # Use autocast for mixed precision on GPU
+        generator = torch.Generator(device=self.generator.device).manual_seed(42)
         if self.device == "cuda":
             with torch.autocast(device_type="cuda", dtype=torch.float16):
                 image = self.generator(
                     text,
                     num_inference_steps=num_inference_steps,
                     guidance_scale=guidance_scale,
-                    generator=torch.Generator(device=self.device).manual_seed(42)  # for reproducibility
+                    generator=generator  # for reproducibility
                 ).images[0]
         else:
             image = self.generator(
                 text,
                 num_inference_steps=num_inference_steps,
                 guidance_scale=guidance_scale,
-                generator=torch.Generator(device=self.device).manual_seed(42)
+                generator=generator
             ).images[0]
-        self.generator.to("cpu")   # free VRAM
-        torch.cuda.empty_cache()
+    
+        # Free VRAM
+        if self.device == "cuda":
+            self.generator.to("cpu")
+            torch.cuda.empty_cache()
+
         return image
 
     def calculate_clip_score(self, image, text):
         """Calculate CLIPScore between image and text"""
         # Preprocess inputs
+        self.clip_model.to(self.device)
         inputs = self.clip_processor(
             text=[text],
             images=[image],
@@ -145,19 +210,25 @@ class TextToImageEvaluator:
         for i, example in enumerate(dataset['spatial_val']):
             if i >= num_samples:
                 break
-
-            text = example['text']
-            print(f"Processing sample {i+1}/{num_samples}: {text}")
+            print("=" * 50)
+            print("GEMINI 2.5 PRO PROMPT ENHANCEMENT")
+            print("=" * 50)
+            print(f"--- Iteration {i+1} ---")
+            enhanced_text = enhance_prompt_with_gemini(example['text'])
+            print(f"Original prompt:  {example['text']}")
+            print(f"Enhanced prompt:  {enhanced_text}")
+            print(f"Word count: {len(enhanced_text.split())}")
+            print(f"Processing sample {i+1}/{num_samples}: {enhanced_text}")
             try:
                 # Generate image
-                generated_image = self.generate_image(text)
+                generated_image = self.generate_image(enhanced_text)
                 # Calculate similarity scores
-                similarity_results = self.evaluate_similarity(generated_image, text)
+                similarity_results = self.evaluate_similarity(generated_image, example['text'])
                 # Store results
                 scores['clip_scores'].append(similarity_results['clip_score'])
                 scores['geneval_scores'].append(similarity_results['geneval_score'])
                 scores['generated_images'].append(generated_image)
-                scores['texts'].append(text)
+                scores['texts'].append(enhanced_text)
 
                 # Save image if requested
                 if save_images:
@@ -396,42 +467,6 @@ class TextToImageEvaluator:
 
         return results
 
-    def plot_score_histogram(self, scores, bins=20, filename='score_histogram.png'):
-        """Plot histogram distributions for CLIP and GenEval scores."""
-        if not scores['clip_scores']:
-            print("No scores to plot.")
-            return
-        fig, ax = plt.subplots(1, 1, figsize=(8, 4))
-        ax.hist(scores['clip_scores'], bins=bins, alpha=0.6, label='CLIPScore')
-        ax.hist(scores['geneval_scores'], bins=bins, alpha=0.6, label='GenEval')
-        ax.set_title('Score Distributions')
-        ax.set_xlabel('Score')
-        ax.set_ylabel('Frequency')
-        ax.legend()
-        plt.tight_layout()
-        plt.savefig(filename, dpi=300, bbox_inches='tight')
-        plt.show()
-
-    def plot_clip_vs_geneval(self, scores, filename='clip_vs_geneval.png'):
-        """Scatter plot CLIP vs GenEval per-sample to inspect correlation."""
-        if not scores['clip_scores']:
-            print("No scores to plot.")
-            return
-        x = np.array(scores['clip_scores'])
-        y = np.array(scores['geneval_scores'])
-        fig, ax = plt.subplots(figsize=(6, 6))
-        ax.scatter(x, y)
-        # fit simple linear line
-        m, b = np.polyfit(x, y, 1)
-        xs = np.linspace(x.min(), x.max(), 100)
-        ax.plot(xs, m*xs + b, linestyle='--', linewidth=1)
-        ax.set_xlabel('CLIPScore')
-        ax.set_ylabel('GenEval')
-        ax.set_title('CLIP vs GenEval')
-        plt.tight_layout()
-        plt.savefig(filename, dpi=300, bbox_inches='tight')
-        plt.show()
-
     def show_image_grid_with_benchmarks(self, scores, ncols=4, filename='image_grid.png'):
         """
         Create a grid of generated images annotated with CLIP, GenEval,
@@ -444,7 +479,7 @@ class TextToImageEvaluator:
         n = len(imgs)
         ncols = min(ncols, n)
         nrows = (n + ncols - 1) // ncols
-        fig, axes = plt.subplots(nrows, ncols, figsize=(4*ncols, 4*nrows))
+        fig, axes = plt.subplots(nrows, ncols, figsize=(5*ncols, 5*nrows))
         axes = np.array(axes).reshape(-1)
         for i, ax in enumerate(axes):
             if i >= n:
@@ -461,9 +496,10 @@ class TextToImageEvaluator:
         plt.tight_layout()
         plt.savefig(filename, dpi=300, bbox_inches='tight')
         plt.show()
+        
+
 
 def main():
-    # Show dataset info
     print(f"Dataset loaded: {len(dataset['spatial_val'])} samples")
     # Initialize evaluator
     print("\nInitializing Text-to-Image Evaluator...")
@@ -484,7 +520,6 @@ def main():
 
     # Generate comprehensive visualizations
     if avg_scores['num_samples'] > 0:
-
         try:
             # 4. Image grid with benchmarks
             print("\n4. Generated Images Grid...")
@@ -500,10 +535,10 @@ def main():
         print("\n" + "="*60)
         print("DETAILED SAMPLE SCORES")
         print("="*60)
-        for i, (text, clip_score, geneval_score) in enumerate(zip(
+        for i, (enhanced_text, clip_score, geneval_score) in enumerate(zip(
             scores['texts'], scores['clip_scores'], scores['geneval_scores'])):
             print(f"{i+1:2d}. CLIP: {clip_score:.4f}, GenEval: {geneval_score:.4f}")
-            print(f"    Text: {text[:80]}{'...' if len(text) > 80 else ''}")
+            print(f"    Text: {enhanced_text[:90]}{'...' if len(enhanced_text) > 90 else ''}")
 
     else:
         print("No samples were successfully processed.")
@@ -532,14 +567,6 @@ def main():
     else:
         print("Diversity Score: Failed to compute")
 
+
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-
