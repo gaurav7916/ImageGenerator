@@ -1,8 +1,7 @@
 # ImageGenerator
 
 
-**GEMINI 2.5 PRO PROMPT ENHANCEMENT**
-==================================================
+GEMINI 2.5 PRO PROMPT ENHANCEMENT
 Original prompt:  a dog in front of a desk
 Enhanced prompt:  A photorealistic, eye-level shot of a Golden Retriever sitting by a wooden desk. Soft, warm morning light streams from a window, creating gentle highlights and deep shadows. The background is softly blurred, focusing on the dog's detailed fur. A cozy, cinematic atmosphere with an earthy color palette.
 Word count: 47
@@ -13,7 +12,7 @@ Processing sample 1/1: A photorealistic, eye-level shot of a Golden Retriever si
   GenEval: 0.6883
 
 ============================================================
-**CALCULATING COMPREHENSIVE BENCHMARKS**
+#### CALCULATING COMPREHENSIVE BENCHMARKS
 ============================================================
 
 Generated Images Grid...
