@@ -9,7 +9,6 @@ from transformers import CLIPProcessor, CLIPModel, CLIPTokenizerFast, CLIPImageP
 import numpy as np
 from diffusers import DiffusionPipeline
 import warnings
-import gradio as gr
 warnings.filterwarnings("ignore")
 
 app = Flask(__name__)
