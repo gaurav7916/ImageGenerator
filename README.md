@@ -1,4 +1,7 @@
-# ImageGenerator
+# Text to Image Generator using Stable Diffusion model
+
+-	Architected to enhance user prompts and produce a high-resolution, semantically accurate image benchmarked using CLIP Score with attention-slicing optimizations for efficient GPU inference.
+
 
 ```
 GEMINI 2.5 PRO PROMPT ENHANCEMENT
